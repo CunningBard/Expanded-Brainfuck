@@ -4,15 +4,17 @@ mod lexer;
 
 const STACK_SIZE: usize = 1000;
 
+type Int = i32;
+
 struct VM {
     program: Vec<Token>,
     program_counter: usize,
     current_instruction: Token,
 
-    loops: Vec<(usize, i32)>,
+    loops: Vec<(usize, Int)>,
     stack_pointer: usize,
-    stack: [i32; STACK_SIZE],
-    stored: (Vec<(usize, i32)>, usize, [i32; STACK_SIZE])
+    stack: [Int; STACK_SIZE],
+    stored: (Vec<(usize, Int)>, usize, [Int; STACK_SIZE])
 }
 
 impl VM {
@@ -91,7 +93,7 @@ impl VM {
         if self.current_instruction.token_type != TokenType::Integer {
             self.error("expected number of loop condition '[1]' while current_cell is not 0")
         }
-        let cond_value = self.current_instruction.value.parse::<i32>().unwrap();
+        let cond_value = self.current_instruction.value.parse::<Int>().unwrap();
         if self.stack[self.stack_pointer] == cond_value {
             while self.current_instruction.token_type != TokenType::BracketClose {
                 self.next_instruction();
@@ -109,6 +111,9 @@ impl VM {
             self.program_counter = loc;
             self.loops.push((loc, cond));
         }
+    }
+    fn get_value_from_pointed(&self) -> Int {
+        self.stack[self.stack_pointer]
     }
     fn condition_handler(&mut self){
         // (>>, "==", <<; ++)
@@ -139,30 +144,30 @@ impl VM {
         let rhs = self.stack[self.stack_pointer];
         self.load_state();
 
-        let mut failed_condition = false;
+        let mut accepted = false;
         match &*condition {
-            "==" => failed_condition = lhs != rhs,
-            ">=" => failed_condition = !(lhs >= rhs),
-            "<=" => failed_condition = !(lhs <= rhs),
-            "!=" => failed_condition = lhs == rhs,
-            ">" => failed_condition = lhs < rhs,
-            "<" => failed_condition = lhs > rhs,
+            "==" => accepted = lhs == rhs,
+            ">=" => accepted = lhs >= rhs,
+            "<=" => accepted = lhs <= rhs,
+            "!=" => accepted = lhs != rhs,
+            ">" => accepted = lhs > rhs,
+            "<" => accepted = lhs < rhs,
              _ => self.error("unknown conditional")
         }
 
-        if failed_condition {
-            while self.current_instruction.token_type != TokenType::ParenthesisClose {
-                self.next_instruction();
-                if self.current_instruction.token_type == TokenType::EndOfFile {
-                    self.error("unclosed conditional, false, program ended")
-                }
-            }
-        } else {
+        if accepted {
             while self.current_instruction.token_type != TokenType::ParenthesisClose {
                 if !self.single(){
                     self.error("unclosed conditional, true, program ended")
                 }
                 self.next_instruction();
+            }
+        } else {
+            while self.current_instruction.token_type != TokenType::ParenthesisClose {
+                self.next_instruction();
+                if self.current_instruction.token_type == TokenType::EndOfFile {
+                    self.error("unclosed conditional, false, program ended")
+                }
             }
         }
     }
